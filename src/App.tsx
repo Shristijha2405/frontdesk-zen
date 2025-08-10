@@ -8,7 +8,9 @@ import QueueManagement from "./pages/QueueManagement";
 import AppointmentManagement from "./pages/AppointmentManagement";
 import DoctorManagement from "./pages/DoctorManagement";
 import Settings from "./pages/Settings";
+import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -19,11 +21,12 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/queue" element={<QueueManagement />} />
-          <Route path="/appointments" element={<AppointmentManagement />} />
-          <Route path="/doctors" element={<DoctorManagement />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/queue" element={<ProtectedRoute><QueueManagement /></ProtectedRoute>} />
+          <Route path="/appointments" element={<ProtectedRoute><AppointmentManagement /></ProtectedRoute>} />
+          <Route path="/doctors" element={<ProtectedRoute><DoctorManagement /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

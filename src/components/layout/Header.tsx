@@ -1,8 +1,22 @@
-import { Activity, Bell, Settings, User } from 'lucide-react';
+import { Activity, Bell, Settings, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function Header() {
+  const { signOut, user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/auth');
+  };
+
+  const handleSettingsClick = () => {
+    navigate('/settings');
+  };
+
   return (
     <header className="bg-card border-b border-border h-16 flex items-center justify-between px-6 shadow-card-medical">
       <div className="flex items-center space-x-4">
@@ -27,13 +41,17 @@ export default function Header() {
           </Button>
         </div>
         
-        <Button variant="ghost" size="icon">
+        <Button variant="ghost" size="icon" onClick={handleSettingsClick}>
           <Settings className="w-5 h-5" />
+        </Button>
+
+        <Button variant="ghost" size="icon" onClick={handleLogout}>
+          <LogOut className="w-5 h-5" />
         </Button>
 
         <div className="flex items-center space-x-3 pl-4 border-l border-border">
           <div className="text-right">
-            <p className="text-sm font-medium text-foreground">Sarah Chen</p>
+            <p className="text-sm font-medium text-foreground">{user?.email || 'User'}</p>
             <p className="text-xs text-muted-foreground">Front Desk Staff</p>
           </div>
           <div className="w-8 h-8 bg-gradient-accent rounded-full flex items-center justify-center">
