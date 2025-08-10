@@ -14,6 +14,110 @@ export type Database = {
   }
   public: {
     Tables: {
+      appointments: {
+        Row: {
+          appointment_date: string
+          appointment_time: string
+          created_at: string
+          created_by: string | null
+          doctor_id: string | null
+          doctor_name: string
+          duration_minutes: number | null
+          id: string
+          notes: string | null
+          patient_email: string | null
+          patient_name: string
+          patient_phone: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          appointment_date: string
+          appointment_time: string
+          created_at?: string
+          created_by?: string | null
+          doctor_id?: string | null
+          doctor_name: string
+          duration_minutes?: number | null
+          id?: string
+          notes?: string | null
+          patient_email?: string | null
+          patient_name: string
+          patient_phone: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          appointment_date?: string
+          appointment_time?: string
+          created_at?: string
+          created_by?: string | null
+          doctor_id?: string | null
+          doctor_name?: string
+          duration_minutes?: number | null
+          id?: string
+          notes?: string | null
+          patient_email?: string | null
+          patient_name?: string
+          patient_phone?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      doctors: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          current_patients: number | null
+          email: string | null
+          id: string
+          location: string
+          max_patients: number | null
+          name: string
+          phone: string | null
+          specialization: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          current_patients?: number | null
+          email?: string | null
+          id?: string
+          location: string
+          max_patients?: number | null
+          name: string
+          phone?: string | null
+          specialization: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          current_patients?: number | null
+          email?: string | null
+          id?: string
+          location?: string
+          max_patients?: number | null
+          name?: string
+          phone?: string | null
+          specialization?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -49,6 +153,62 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      queue: {
+        Row: {
+          check_in_time: string | null
+          created_at: string
+          created_by: string | null
+          doctor_id: string | null
+          estimated_time_minutes: number | null
+          id: string
+          notes: string | null
+          patient_name: string
+          phone: string
+          priority: boolean | null
+          queue_number: number
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          check_in_time?: string | null
+          created_at?: string
+          created_by?: string | null
+          doctor_id?: string | null
+          estimated_time_minutes?: number | null
+          id?: string
+          notes?: string | null
+          patient_name: string
+          phone: string
+          priority?: boolean | null
+          queue_number: number
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          check_in_time?: string | null
+          created_at?: string
+          created_by?: string | null
+          doctor_id?: string | null
+          estimated_time_minutes?: number | null
+          id?: string
+          notes?: string | null
+          patient_name?: string
+          phone?: string
+          priority?: boolean | null
+          queue_number?: number
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "queue_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

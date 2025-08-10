@@ -1,34 +1,99 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, Calendar, Clock, User, Phone } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import StatsCard from '@/components/dashboard/StatsCard';
+import AddAppointmentDialog from '@/components/dialogs/AddAppointmentDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { mockAppointments, Appointment } from '@/lib/mockData';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+
+interface Appointment {
+  id: string;
+  patient_name: string;
+  patient_phone: string;
+  patient_email?: string;
+  doctor_name: string;
+  appointment_date: string;
+  appointment_time: string;
+  status: 'booked' | 'completed' | 'cancelled' | 'rescheduled';
+  notes?: string;
+}
 
 export default function AppointmentManagement() {
-  const [appointments, setAppointments] = useState<Appointment[]>(mockAppointments);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchAppointments();
+  }, []);
+
+  const fetchAppointments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .order('appointment_date', { ascending: true })
+        .order('appointment_time', { ascending: true });
+
+      if (error) throw error;
+      setAppointments((data || []).map(a => ({
+        ...a,
+        status: a.status as 'booked' | 'completed' | 'cancelled' | 'rescheduled'
+      })));
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to load appointments.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredAppointments = appointments.filter(apt =>
-    apt.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    apt.doctorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    apt.patientPhone.includes(searchTerm)
+    apt.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    apt.doctor_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    apt.patient_phone.includes(searchTerm)
   );
 
-  const todayAppointments = filteredAppointments.filter(apt => apt.date === '2024-01-15');
+  const todayAppointments = filteredAppointments.filter(apt => apt.appointment_date === new Date().toISOString().split('T')[0]);
   const bookedAppointments = filteredAppointments.filter(apt => apt.status === 'booked');
   const completedAppointments = filteredAppointments.filter(apt => apt.status === 'completed');
   const cancelledAppointments = filteredAppointments.filter(apt => apt.status === 'cancelled');
 
-  const handleStatusUpdate = (id: string, newStatus: Appointment['status']) => {
-    setAppointments(appointments.map(apt => 
-      apt.id === id ? { ...apt, status: newStatus } : apt
-    ));
+  const handleStatusUpdate = async (id: string, newStatus: Appointment['status']) => {
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ status: newStatus })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setAppointments(appointments.map(apt => 
+        apt.id === id ? { ...apt, status: newStatus } : apt
+      ));
+
+      toast({
+        title: "Success!",
+        description: `Appointment ${newStatus}.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to update appointment.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getStatusColor = (status: Appointment['status']) => {
@@ -50,10 +115,10 @@ export default function AppointmentManagement() {
               <User className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h3 className="font-semibold text-foreground">{appointment.patientName}</h3>
+              <h3 className="font-semibold text-foreground">{appointment.patient_name}</h3>
               <div className="flex items-center space-x-1 text-sm text-muted-foreground">
                 <Phone className="w-3 h-3" />
-                <span>{appointment.patientPhone}</span>
+                <span>{appointment.patient_phone}</span>
               </div>
             </div>
           </div>
@@ -65,15 +130,15 @@ export default function AppointmentManagement() {
         <div className="space-y-2 mb-4">
           <div className="flex items-center space-x-2 text-sm">
             <User className="w-4 h-4 text-muted-foreground" />
-            <span className="text-foreground">{appointment.doctorName}</span>
+            <span className="text-foreground">{appointment.doctor_name}</span>
           </div>
           <div className="flex items-center space-x-2 text-sm">
             <Calendar className="w-4 h-4 text-muted-foreground" />
-            <span className="text-foreground">{appointment.date}</span>
+            <span className="text-foreground">{appointment.appointment_date}</span>
           </div>
           <div className="flex items-center space-x-2 text-sm">
             <Clock className="w-4 h-4 text-muted-foreground" />
-            <span className="text-foreground">{appointment.time}</span>
+            <span className="text-foreground">{appointment.appointment_time}</span>
           </div>
         </div>
 
@@ -133,7 +198,10 @@ export default function AppointmentManagement() {
               <h1 className="text-3xl font-bold text-foreground">Appointment Management</h1>
               <p className="text-muted-foreground">Book, reschedule, and manage patient appointments</p>
             </div>
-            <Button className="bg-gradient-primary shadow-medical">
+            <Button 
+              onClick={() => setShowAddDialog(true)}
+              className="bg-gradient-primary shadow-medical"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Book New Appointment
             </Button>
@@ -203,7 +271,12 @@ export default function AppointmentManagement() {
             </TabsList>
 
             <TabsContent value="today" className="space-y-4">
-              {todayAppointments.length > 0 ? (
+              {loading ? (
+                <div className="text-center py-12">
+                  <div className="w-8 h-8 border-4 border-medical-blue border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-muted-foreground">Loading appointments...</p>
+                </div>
+              ) : todayAppointments.length > 0 ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {todayAppointments.map(appointment => (
                     <AppointmentCard key={appointment.id} appointment={appointment} />
@@ -282,6 +355,12 @@ export default function AppointmentManagement() {
               </div>
             </TabsContent>
           </Tabs>
+
+          <AddAppointmentDialog
+            open={showAddDialog}
+            onOpenChange={setShowAddDialog}
+            onAppointmentAdded={fetchAppointments}
+          />
         </main>
       </div>
     </div>

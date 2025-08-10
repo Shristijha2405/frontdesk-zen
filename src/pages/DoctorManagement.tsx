@@ -1,18 +1,62 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, UserCheck, MapPin, Clock, Users } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import StatsCard from '@/components/dashboard/StatsCard';
+import AddDoctorDialog from '@/components/dialogs/AddDoctorDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { mockDoctors, Doctor } from '@/lib/mockData';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+
+interface Doctor {
+  id: string;
+  name: string;
+  specialization: string;
+  location: string;
+  phone?: string;
+  email?: string;
+  status: 'available' | 'busy' | 'offline';
+  max_patients: number;
+  current_patients: number;
+}
 
 export default function DoctorManagement() {
-  const [doctors, setDoctors] = useState<Doctor[]>(mockDoctors);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchDoctors();
+  }, []);
+
+  const fetchDoctors = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('doctors')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setDoctors((data || []).map(d => ({
+        ...d,
+        status: d.status as 'available' | 'busy' | 'offline'
+      })));
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to load doctors.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredDoctors = doctors.filter(doctor =>
     doctor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -34,7 +78,7 @@ export default function DoctorManagement() {
   };
 
   const DoctorCard = ({ doctor }: { doctor: Doctor }) => {
-    const patientLoad = (doctor.currentPatients / doctor.maxPatients) * 100;
+    const patientLoad = (doctor.current_patients / doctor.max_patients) * 100;
 
     return (
       <Card className="shadow-card-medical hover:shadow-medical transition-all duration-300">
@@ -66,24 +110,25 @@ export default function DoctorManagement() {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Patient Load</span>
                 <span className="text-foreground font-medium">
-                  {doctor.currentPatients}/{doctor.maxPatients}
+                  {doctor.current_patients}/{doctor.max_patients}
                 </span>
               </div>
               <Progress value={patientLoad} className="h-2" />
             </div>
 
             <div className="pt-2">
-              <h4 className="text-sm font-medium text-foreground mb-2">Today's Schedule</h4>
-              {doctor.availability.slice(0, 2).map((schedule, index) => (
-                <div key={index} className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{schedule.day}</span>
-                  <span>{schedule.startTime} - {schedule.endTime}</span>
+              <h4 className="text-sm font-medium text-foreground mb-2">Contact Info</h4>
+              {doctor.phone && (
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Phone:</span>
+                  <span>{doctor.phone}</span>
                 </div>
-              ))}
-              {doctor.availability.length > 2 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  +{doctor.availability.length - 2} more days
-                </p>
+              )}
+              {doctor.email && (
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Email:</span>
+                  <span>{doctor.email}</span>
+                </div>
               )}
             </div>
 
@@ -115,7 +160,10 @@ export default function DoctorManagement() {
               <h1 className="text-3xl font-bold text-foreground">Doctor Management</h1>
               <p className="text-muted-foreground">Manage doctor profiles, schedules, and availability</p>
             </div>
-            <Button className="bg-gradient-primary shadow-medical">
+            <Button 
+              onClick={() => setShowAddDialog(true)}
+              className="bg-gradient-primary shadow-medical"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Add New Doctor
             </Button>
@@ -181,11 +229,18 @@ export default function DoctorManagement() {
           </div>
 
           {/* Doctors Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredDoctors.map(doctor => (
-              <DoctorCard key={doctor.id} doctor={doctor} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="w-8 h-8 border-4 border-medical-blue border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading doctors...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredDoctors.map(doctor => (
+                <DoctorCard key={doctor.id} doctor={doctor} />
+              ))}
+            </div>
+          )}
 
           {filteredDoctors.length === 0 && (
             <Card className="shadow-card-medical">
@@ -231,6 +286,12 @@ export default function DoctorManagement() {
               </div>
             </CardContent>
           </Card>
+
+          <AddDoctorDialog
+            open={showAddDialog}
+            onOpenChange={setShowAddDialog}
+            onDoctorAdded={fetchDoctors}
+          />
         </main>
       </div>
     </div>

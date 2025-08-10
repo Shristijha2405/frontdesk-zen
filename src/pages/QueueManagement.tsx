@@ -1,26 +1,105 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, Filter, Clock, Users, AlertTriangle } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import QueueCard from '@/components/queue/QueueCard';
 import StatsCard from '@/components/dashboard/StatsCard';
+import AddPatientDialog from '@/components/dialogs/AddPatientDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { mockQueue, QueueItem } from '@/lib/mockData';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+
+interface QueueItem {
+  id: string;
+  queueNumber: number;
+  patientName: string;
+  phone: string;
+  waitTime: string;
+  status: 'waiting' | 'with-doctor' | 'completed' | 'urgent';
+  priority: boolean;
+}
 
 export default function QueueManagement() {
-  const [queueItems, setQueueItems] = useState<QueueItem[]>(mockQueue);
+  const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const { toast } = useToast();
 
-  const handleStatusUpdate = (id: string, newStatus: QueueItem['status']) => {
-    setQueueItems(items => 
-      items.map(item => 
-        item.id === id ? { ...item, status: newStatus } : item
-      )
-    );
+  useEffect(() => {
+    fetchQueue();
+  }, []);
+
+  const fetchQueue = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('queue')
+        .select('*')
+        .order('queue_number', { ascending: true });
+
+      if (error) throw error;
+      
+      const mappedData = (data || []).map(q => {
+        const checkInTime = new Date(q.check_in_time);
+        const now = new Date();
+        const waitTimeMs = now.getTime() - checkInTime.getTime();
+        const waitTimeMinutes = Math.floor(waitTimeMs / (1000 * 60));
+        
+        return {
+          id: q.id,
+          queueNumber: q.queue_number,
+          patientName: q.patient_name,
+          phone: q.phone,
+          waitTime: `${waitTimeMinutes} min`,
+          status: q.status as 'waiting' | 'with-doctor' | 'completed' | 'urgent',
+          priority: q.priority
+        };
+      });
+      
+      setQueueItems(mappedData);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to load queue.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusUpdate = async (id: string, newStatus: QueueItem['status']) => {
+    try {
+      const { error } = await supabase
+        .from('queue')
+        .update({ status: newStatus })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setQueueItems(items => 
+        items.map(item => 
+          item.id === id ? { ...item, status: newStatus } : item
+        )
+      );
+
+      fetchQueue(); // Refresh the data to update wait times
+
+      toast({
+        title: "Success!",
+        description: `Patient status updated to ${newStatus}.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to update patient status.",
+        variant: "destructive",
+      });
+    }
   };
 
   const filteredQueue = queueItems.filter(item =>
@@ -33,21 +112,6 @@ export default function QueueManagement() {
   const activeQueue = filteredQueue.filter(item => item.status === 'with-doctor');
   const completedQueue = filteredQueue.filter(item => item.status === 'completed');
 
-  const addNewPatient = () => {
-    const nextQueueNumber = Math.max(...queueItems.map(item => item.queueNumber)) + 1;
-    const newPatient: QueueItem = {
-      id: Date.now().toString(),
-      queueNumber: nextQueueNumber,
-      patientName: 'New Patient',
-      phone: '+1-555-0000',
-      checkInTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      waitTime: '0 min',
-      status: 'waiting',
-      priority: false,
-      estimatedTime: '15 min'
-    };
-    setQueueItems([...queueItems, newPatient]);
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -63,7 +127,10 @@ export default function QueueManagement() {
               <h1 className="text-3xl font-bold text-foreground">Queue Management</h1>
               <p className="text-muted-foreground">Manage patient queues and track waiting times</p>
             </div>
-            <Button onClick={addNewPatient} className="bg-gradient-primary shadow-medical">
+            <Button 
+              onClick={() => setShowAddDialog(true)} 
+              className="bg-gradient-primary shadow-medical"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Add Walk-in Patient
             </Button>
@@ -139,34 +206,43 @@ export default function QueueManagement() {
             </TabsList>
 
             <TabsContent value="all" className="space-y-4">
-              {urgentQueue.map(item => (
-                <QueueCard 
-                  key={item.id} 
-                  item={item} 
-                  onStatusUpdate={handleStatusUpdate}
-                />
-              ))}
-              {activeQueue.map(item => (
-                <QueueCard 
-                  key={item.id} 
-                  item={item} 
-                  onStatusUpdate={handleStatusUpdate}
-                />
-              ))}
-              {waitingQueue.map(item => (
-                <QueueCard 
-                  key={item.id} 
-                  item={item} 
-                  onStatusUpdate={handleStatusUpdate}
-                />
-              ))}
-              {completedQueue.map(item => (
-                <QueueCard 
-                  key={item.id} 
-                  item={item} 
-                  onStatusUpdate={handleStatusUpdate}
-                />
-              ))}
+              {loading ? (
+                <div className="text-center py-12">
+                  <div className="w-8 h-8 border-4 border-medical-blue border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-muted-foreground">Loading queue...</p>
+                </div>
+              ) : (
+                <>
+                  {urgentQueue.map(item => (
+                    <QueueCard 
+                      key={item.id} 
+                      item={item} 
+                      onStatusUpdate={handleStatusUpdate}
+                    />
+                  ))}
+                  {activeQueue.map(item => (
+                    <QueueCard 
+                      key={item.id} 
+                      item={item} 
+                      onStatusUpdate={handleStatusUpdate}
+                    />
+                  ))}
+                  {waitingQueue.map(item => (
+                    <QueueCard 
+                      key={item.id} 
+                      item={item} 
+                      onStatusUpdate={handleStatusUpdate}
+                    />
+                  ))}
+                  {completedQueue.map(item => (
+                    <QueueCard 
+                      key={item.id} 
+                      item={item} 
+                      onStatusUpdate={handleStatusUpdate}
+                    />
+                  ))}
+                </>
+              )}
             </TabsContent>
 
             <TabsContent value="urgent" className="space-y-4">
@@ -249,6 +325,12 @@ export default function QueueManagement() {
               )}
             </TabsContent>
           </Tabs>
+
+          <AddPatientDialog
+            open={showAddDialog}
+            onOpenChange={setShowAddDialog}
+            onPatientAdded={fetchQueue}
+          />
         </main>
       </div>
     </div>
